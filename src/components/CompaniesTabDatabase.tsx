@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,23 +7,108 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { StarRating } from '@/components/StarRating';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockCompanies, mockReviews, Review } from '@/data/mockData';
-import { Building2, MapPin, Code, MessageSquare } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Building2, MapPin, Briefcase, Code, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-export const CompaniesTab: React.FC = () => {
-  const { user, isAuthenticated, generateAnonymousName } = useAuth();
+interface Company {
+  id: string;
+  name: string;
+  industry: string;
+  location: string;
+  description: string;
+  tech_stack: string[];
+  created_at: string;
+}
+
+interface Review {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  content: string;
+  rating: number;
+  user_id: string;
+  author: string;
+  is_anonymous: boolean;
+  created_at: string;
+}
+
+export const CompaniesTabDatabase: React.FC = () => {
+  const { user, isAuthenticated, generateAnonymousName, profile } = useAuth();
   const { toast } = useToast();
-  const [selectedCompany, setSelectedCompany] = useState(mockCompanies[0]);
-  const [reviews, setReviews] = useState<Review[]>(mockReviews);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newReview, setNewReview] = useState({ content: '', rating: 5, isAnonymous: true });
 
-  const companyReviews = reviews.filter(
-    review => review.entityType === 'company' && review.entityId === selectedCompany.id
-  );
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
 
-  const handleSubmitReview = () => {
-    if (!isAuthenticated) {
+  useEffect(() => {
+    if (selectedCompany) {
+      fetchReviews(selectedCompany.id);
+    }
+  }, [selectedCompany]);
+
+  const fetchCompanies = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setCompanies(data || []);
+      if (data && data.length > 0) {
+        setSelectedCompany(data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+      toast({ title: 'Error', description: 'Failed to load companies.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchReviews = async (companyId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('entity_type', 'company')
+        .eq('entity_id', companyId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const reviewsWithAuthors = await Promise.all(
+        (data || []).map(async (review) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('user_id', review.user_id)
+            .single();
+
+          return {
+            ...review,
+            author: review.is_anonymous 
+              ? generateAnonymousName('company', companyId)
+              : profileData?.username || 'Unknown User'
+          };
+        })
+      );
+
+      setReviews(reviewsWithAuthors);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      toast({ title: 'Error', description: 'Failed to load reviews.' });
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!isAuthenticated || !user || !selectedCompany) {
       toast({ title: 'Please login', description: 'You need to be logged in to submit reviews.' });
       return;
     }
@@ -33,25 +118,51 @@ export const CompaniesTab: React.FC = () => {
       return;
     }
 
-    const review: Review = {
-      id: Math.random().toString(36).substr(2, 9),
-      entityType: 'company',
-      entityId: selectedCompany.id,
-      content: newReview.content,
-      rating: newReview.rating,
-      author: newReview.isAnonymous 
-        ? generateAnonymousName('company', selectedCompany.id) 
-        : user!.username,
-      isAnonymous: newReview.isAnonymous,
-      timestamp: new Date()
-    };
+    try {
+      const { data, error } = await supabase
+        .from('reviews')
+        .insert({
+          entity_type: 'company',
+          entity_id: selectedCompany.id,
+          content: newReview.content,
+          rating: newReview.rating,
+          user_id: user.id,
+          is_anonymous: newReview.isAnonymous
+        })
+        .select()
+        .single();
 
-    setReviews([review, ...reviews]);
-    setNewReview({ content: '', rating: 5, isAnonymous: true });
-    toast({ title: 'Review submitted!', description: 'Thank you for sharing your experience.' });
+      if (error) throw error;
+
+      const newReviewWithAuthor = {
+        ...data,
+        author: newReview.isAnonymous 
+          ? generateAnonymousName('company', selectedCompany.id)
+          : profile?.username || 'Unknown User'
+      };
+
+      setReviews([newReviewWithAuthor, ...reviews]);
+      setNewReview({ content: '', rating: 5, isAnonymous: true });
+      toast({ title: 'Review submitted!', description: 'Thank you for sharing your experience.' });
+    } catch (error: any) {
+      if (error.code === '23505') {
+        toast({ title: 'Already reviewed', description: 'You have already reviewed this company.' });
+      } else {
+        console.error('Error submitting review:', error);
+        toast({ title: 'Error', description: 'Failed to submit review.' });
+      }
+    }
   };
 
-  const formatTimeAgo = (date: Date) => {
+  const calculateAverageRating = (companyId: string) => {
+    const companyReviews = reviews.filter(r => r.entity_id === companyId);
+    if (companyReviews.length === 0) return 0;
+    const sum = companyReviews.reduce((acc, review) => acc + review.rating, 0);
+    return sum / companyReviews.length;
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -61,12 +172,39 @@ export const CompaniesTab: React.FC = () => {
     return `${diffDays} days ago`;
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-gradient-card shadow-card">
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Loading companies...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!selectedCompany) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-gradient-card shadow-card">
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">No companies available.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const averageRating = calculateAverageRating(selectedCompany.id);
+  const companyReviews = reviews.filter(r => r.entity_id === selectedCompany.id);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Company List */}
       <div className="lg:col-span-1 space-y-4">
         <h3 className="text-lg font-semibold text-foreground">Select a Company</h3>
-        {mockCompanies.map((company) => (
+        {companies.map((company) => (
           <Card 
             key={company.id}
             className={`cursor-pointer transition-all duration-200 hover:shadow-card ${
@@ -86,9 +224,9 @@ export const CompaniesTab: React.FC = () => {
                 {company.location}
               </p>
               <div className="flex items-center justify-between">
-                <StarRating rating={company.averageRating} readonly size="sm" />
+                <StarRating rating={calculateAverageRating(company.id)} readonly size="sm" />
                 <span className="text-xs text-muted-foreground">
-                  {company.totalReviews} reviews
+                  {reviews.filter(r => r.entity_id === company.id).length} reviews
                 </span>
               </div>
             </CardContent>
@@ -109,7 +247,8 @@ export const CompaniesTab: React.FC = () => {
                 </CardTitle>
                 <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <Badge variant="outline">{selectedCompany.industry}</Badge>
+                    <Briefcase className="w-4 h-4" />
+                    {selectedCompany.industry}
                   </span>
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
@@ -128,17 +267,17 @@ export const CompaniesTab: React.FC = () => {
                 Tech Stack:
               </h4>
               <div className="flex flex-wrap gap-2">
-                {selectedCompany.techStack.map((tech, index) => (
-                  <Badge key={index} variant="secondary">{tech}</Badge>
+                {selectedCompany.tech_stack.map((tech, index) => (
+                  <Badge key={index} variant="outline">{tech}</Badge>
                 ))}
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t">
               <div className="flex items-center gap-4">
-                <StarRating rating={selectedCompany.averageRating} readonly />
+                <StarRating rating={averageRating} readonly />
                 <span className="text-sm text-muted-foreground">
-                  {selectedCompany.totalReviews} reviews
+                  {companyReviews.length} reviews
                 </span>
               </div>
             </div>
@@ -163,7 +302,7 @@ export const CompaniesTab: React.FC = () => {
             </div>
             
             <Textarea
-              placeholder="Share your experience with this company. How was the work culture, interview process, work-life balance, growth opportunities, etc.?"
+              placeholder="Share your experience working at this company. How was the culture, work-life balance, career growth, etc.?"
               value={newReview.content}
               onChange={(e) => setNewReview({ ...newReview, content: e.target.value })}
               className="min-h-[100px]"
@@ -172,11 +311,11 @@ export const CompaniesTab: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Switch
-                  id="anonymous-company-review"
+                  id="anonymous-review"
                   checked={newReview.isAnonymous}
                   onCheckedChange={(checked) => setNewReview({ ...newReview, isAnonymous: checked })}
                 />
-                <Label htmlFor="anonymous-company-review" className="text-sm">
+                <Label htmlFor="anonymous-review" className="text-sm">
                   Review anonymously {newReview.isAnonymous && isAuthenticated && 
                     `(as ${generateAnonymousName('company', selectedCompany.id)})`}
                 </Label>
@@ -211,7 +350,7 @@ export const CompaniesTab: React.FC = () => {
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {formatTimeAgo(review.timestamp)}
+                      {formatTimeAgo(review.created_at)}
                     </span>
                   </div>
                   <p className="text-foreground leading-relaxed">{review.content}</p>

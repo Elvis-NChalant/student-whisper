@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Heart, MessageCircle, Send, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -13,43 +14,72 @@ interface Post {
   id: string;
   title: string;
   content: string;
+  user_id: string;
   author: string;
-  isAnonymous: boolean;
-  likes: number;
-  timestamp: Date;
+  is_anonymous: boolean;
+  likes_count: number;
+  created_at: string;
   hasLiked: boolean;
 }
 
 export const FeedTab: React.FC = () => {
-  const { user, isAuthenticated, generateAnonymousName } = useAuth();
+  const { user, isAuthenticated, generateAnonymousName, profile } = useAuth();
   const { toast } = useToast();
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: '1',
-      title: 'First week of CS 301 was intense!',
-      content: 'Just finished the first week of Data Structures and Algorithms. The recursion problems are already challenging but Dr. Smith explains concepts really well. Anyone else finding the homework difficult?',
-      author: 'Senior Student 42',
-      isAnonymous: true,
-      likes: 12,
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      hasLiked: false
-    },
-    {
-      id: '2',
-      title: 'TechCorp Solutions Interview Experience',
-      content: 'Just had my final round interview with TechCorp! The technical questions were fair and the team seemed really collaborative. They asked about React state management and system design. Fingers crossed! 🤞',
-      author: 'Anonymous Graduate 123',
-      isAnonymous: true,
-      likes: 8,
-      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      hasLiked: true
-    }
-  ]);
-
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newPost, setNewPost] = useState({ title: '', content: '', isAnonymous: true });
 
-  const handleCreatePost = () => {
-    if (!isAuthenticated) {
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      const { data: postsData, error: postsError } = await supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (postsError) throw postsError;
+
+      const { data: likesData, error: likesError } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .eq('user_id', user?.id || '');
+
+      if (likesError && user) throw likesError;
+
+      const likedPostIds = new Set(likesData?.map(like => like.post_id) || []);
+
+      const postsWithLikes = await Promise.all(
+        postsData.map(async (post) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('user_id', post.user_id)
+            .single();
+
+          return {
+            ...post,
+            author: post.is_anonymous 
+              ? generateAnonymousName('feed', 'general')
+              : profileData?.username || 'Unknown User',
+            hasLiked: likedPostIds.has(post.id)
+          };
+        })
+      );
+
+      setPosts(postsWithLikes);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      toast({ title: 'Error', description: 'Failed to load posts.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreatePost = async () => {
+    if (!isAuthenticated || !user) {
       toast({ title: 'Please login', description: 'You need to be logged in to create posts.' });
       return;
     }
@@ -59,41 +89,89 @@ export const FeedTab: React.FC = () => {
       return;
     }
 
-    const post: Post = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: newPost.title,
-      content: newPost.content,
-      author: newPost.isAnonymous ? generateAnonymousName('feed', 'general') : user!.username,
-      isAnonymous: newPost.isAnonymous,
-      likes: 0,
-      timestamp: new Date(),
-      hasLiked: false
-    };
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          title: newPost.title,
+          content: newPost.content,
+          user_id: user.id,
+          is_anonymous: newPost.isAnonymous
+        })
+        .select()
+        .single();
 
-    setPosts([post, ...posts]);
-    setNewPost({ title: '', content: '', isAnonymous: true });
-    toast({ title: 'Post created!', description: 'Your post has been shared with the community.' });
+      if (error) throw error;
+
+      const newPostWithAuthor = {
+        ...data,
+        author: newPost.isAnonymous 
+          ? generateAnonymousName('feed', 'general') 
+          : profile?.username || 'Unknown User',
+        hasLiked: false
+      };
+
+      setPosts([newPostWithAuthor, ...posts]);
+      setNewPost({ title: '', content: '', isAnonymous: true });
+      toast({ title: 'Post created!', description: 'Your post has been shared with the community.' });
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast({ title: 'Error', description: 'Failed to create post.' });
+    }
   };
 
-  const handleLike = (postId: string) => {
-    if (!isAuthenticated) {
+  const handleLike = async (postId: string) => {
+    if (!isAuthenticated || !user) {
       toast({ title: 'Please login', description: 'You need to be logged in to like posts.' });
       return;
     }
 
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          likes: post.hasLiked ? post.likes - 1 : post.likes + 1,
-          hasLiked: !post.hasLiked
-        };
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    try {
+      if (post.hasLiked) {
+        // Unlike
+        await supabase
+          .from('post_likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
+        await supabase
+          .from('posts')
+          .update({ likes_count: post.likes_count - 1 })
+          .eq('id', postId);
+      } else {
+        // Like
+        await supabase
+          .from('post_likes')
+          .insert({ post_id: postId, user_id: user.id });
+
+        await supabase
+          .from('posts')
+          .update({ likes_count: post.likes_count + 1 })
+          .eq('id', postId);
       }
-      return post;
-    }));
+
+      setPosts(posts.map(p => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            likes_count: post.hasLiked ? p.likes_count - 1 : p.likes_count + 1,
+            hasLiked: !p.hasLiked
+          };
+        }
+        return p;
+      }));
+    } catch (error) {
+      console.error('Error updating like:', error);
+      toast({ title: 'Error', description: 'Failed to update like.' });
+    }
   };
 
-  const formatTimeAgo = (date: Date) => {
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -106,6 +184,18 @@ export const FeedTab: React.FC = () => {
     if (diffDays === 1) return '1 day ago';
     return `${diffDays} days ago`;
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-gradient-card shadow-card">
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Loading posts...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -160,7 +250,7 @@ export const FeedTab: React.FC = () => {
                     <Users className="w-4 h-4" />
                     <span>{post.author}</span>
                     <span>•</span>
-                    <span>{formatTimeAgo(post.timestamp)}</span>
+                    <span>{formatTimeAgo(post.created_at)}</span>
                   </div>
                 </div>
               </div>
@@ -175,7 +265,7 @@ export const FeedTab: React.FC = () => {
                   className={`flex items-center gap-2 ${post.hasLiked ? 'text-accent' : ''}`}
                 >
                   <Heart className={`w-4 h-4 ${post.hasLiked ? 'fill-current' : ''}`} />
-                  {post.likes}
+                  {post.likes_count}
                 </Button>
                 <Button variant="ghost" size="sm" className="flex items-center gap-2">
                   <MessageCircle className="w-4 h-4" />

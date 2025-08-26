@@ -25,13 +25,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ open, onOpenChange }) => {
     setIsLoading(true);
     
     try {
-      const success = await login(loginData.username, loginData.password);
-      if (success) {
+      const { error } = await login(loginData.username, loginData.password);
+      if (!error) {
         toast({ title: 'Welcome back!', description: 'Successfully logged in.' });
         onOpenChange(false);
         setLoginData({ username: '', password: '' });
       } else {
-        toast({ title: 'Login failed', description: 'Invalid credentials.', variant: 'destructive' });
+        toast({ title: 'Login failed', description: error, variant: 'destructive' });
       }
     } catch (error) {
       toast({ title: 'Error', description: 'An error occurred during login.', variant: 'destructive' });
@@ -51,13 +51,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ open, onOpenChange }) => {
     setIsLoading(true);
     
     try {
-      const success = await register(registerData.username, registerData.email, registerData.password);
-      if (success) {
-        toast({ title: 'Account created!', description: 'Welcome to StudentWhisper.' });
+      const { error } = await register(registerData.username, registerData.email, registerData.password);
+      if (!error) {
+        toast({ title: 'Account created!', description: 'Welcome to StudentWhisper. Please check your email.' });
         onOpenChange(false);
         setRegisterData({ username: '', email: '', password: '', confirmPassword: '' });
       } else {
-        toast({ title: 'Registration failed', description: 'Please try again.', variant: 'destructive' });
+        toast({ title: 'Registration failed', description: error, variant: 'destructive' });
       }
     } catch (error) {
       toast({ title: 'Error', description: 'An error occurred during registration.', variant: 'destructive' });
@@ -90,9 +90,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ open, onOpenChange }) => {
           <TabsContent value="login" className="space-y-4">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="login-username">Username</Label>
+                <Label htmlFor="login-username">Email</Label>
                 <Input
                   id="login-username"
+                  type="email"
                   value={loginData.username}
                   onChange={(e) => setLoginData({ ...loginData, username: e.target.value })}
                   required

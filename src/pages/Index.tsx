@@ -4,13 +4,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { AuthModal } from '@/components/AuthModal';
 import { FeedTab } from '@/components/FeedTab';
-import { CoursesTab } from '@/components/CoursesTab';
-import { CompaniesTab } from '@/components/CompaniesTab';
+import { CoursesTabDatabase } from '@/components/CoursesTabDatabase';
+import { CompaniesTabDatabase } from '@/components/CompaniesTabDatabase';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { MessageSquare, BookOpen, Building2, LogOut, User } from 'lucide-react';
 
 const MainContent = () => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, profile, isAuthenticated, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   return (
@@ -34,10 +34,10 @@ const MainContent = () => {
                   <div className="flex items-center gap-2">
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="bg-accent text-accent-foreground text-sm">
-                        {user?.username.charAt(0).toUpperCase()}
+                        {profile?.username?.charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium">{user?.username}</span>
+                    <span className="text-sm font-medium">{profile?.username || 'User'}</span>
                   </div>
                   <Button 
                     variant="outline" 
@@ -100,11 +100,11 @@ const MainContent = () => {
             </TabsContent>
             
             <TabsContent value="courses">
-              <CoursesTab />
+              <CoursesTabDatabase />
             </TabsContent>
             
             <TabsContent value="companies">
-              <CompaniesTab />
+              <CompaniesTabDatabase />
             </TabsContent>
           </Tabs>
         </div>
