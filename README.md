@@ -107,4 +107,8 @@ flowchart TD
 
 StudentWhisper is the campus’s heartbeat—smart, connected, and built to empower. Let’s redefine college life.
 
+![StudentWhisper Screenshot](https://github.com/Elvis-NChalant/student-whisper/blob/main/src/Screenshot%202025-08-26%20134031.png)
+
+https://github.com/Elvis-NChalant/student-whisper/blob/main/src/Screenshot%202025-08-26%20134101.png
+
 </xaiArtifact>
