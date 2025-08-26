@@ -6,8 +6,9 @@ import { AuthModal } from '@/components/AuthModal';
 import { FeedTab } from '@/components/FeedTab';
 import { CoursesTabDatabase } from '@/components/CoursesTabDatabase';
 import { CompaniesTabDatabase } from '@/components/CompaniesTabDatabase';
+import { BookingTab } from '@/components/BookingTab'; // Add this import
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { MessageSquare, BookOpen, Building2, LogOut, User } from 'lucide-react';
+import { MessageSquare, BookOpen, Building2, LogOut, User, Calendar } from 'lucide-react'; // Add Calendar icon
 
 const MainContent = () => {
   const { user, profile, isAuthenticated, logout } = useAuth();
@@ -70,17 +71,17 @@ const MainContent = () => {
           {/* Welcome Section */}
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-4">
-              Anonymous Course & Company Reviews
+              StudentWhisper Campus Platform
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Share your honest experiences with courses and companies. Help fellow students make 
-              informed decisions while maintaining your privacy through anonymous reviews.
+              Your comprehensive platform for course reviews, company insights, and campus bookings.
+              Make informed decisions and manage your academic journey effectively.
             </p>
           </div>
 
           {/* Navigation Tabs */}
           <Tabs defaultValue="feed" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-8 bg-gradient-card shadow-card">
+            <TabsList className="grid w-full grid-cols-4 mb-8 bg-gradient-card shadow-card">
               <TabsTrigger value="feed" className="flex items-center gap-2 text-base">
                 <MessageSquare className="w-5 h-5" />
                 Community Feed
@@ -92,6 +93,10 @@ const MainContent = () => {
               <TabsTrigger value="companies" className="flex items-center gap-2 text-base">
                 <Building2 className="w-5 h-5" />
                 Companies
+              </TabsTrigger>
+              <TabsTrigger value="booking" className="flex items-center gap-2 text-base">
+                <Calendar className="w-5 h-5" />
+                Campus Booking
               </TabsTrigger>
             </TabsList>
             
@@ -106,6 +111,10 @@ const MainContent = () => {
             <TabsContent value="companies">
               <CompaniesTabDatabase />
             </TabsContent>
+            
+            <TabsContent value="booking">
+              <BookingTab />
+            </TabsContent>
           </Tabs>
         </div>
       </main>
@@ -115,7 +124,7 @@ const MainContent = () => {
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
             <p className="text-muted-foreground">
-              StudentWhisper - Anonymous reviews for better academic and career decisions
+              StudentWhisper - Your complete campus companion platform
             </p>
           </div>
         </div>

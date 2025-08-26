@@ -1,0 +1,8 @@
+pdfplumber
+python-docx
+pytesseract
+Pillow
+pdf2image
+python-dotenv
+regex
+google-generativeai
