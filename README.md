@@ -109,6 +109,6 @@ StudentWhisper is the campus’s heartbeat—smart, connected, and built to empo
 
 ![StudentWhisper Screenshot](https://github.com/Elvis-NChalant/student-whisper/blob/main/src/Screenshot%202025-08-26%20134031.png)
 
-![StudentWhisper Screenshot]()
+![StudentWhisper Screenshot](https://github.com/Elvis-NChalant/student-whisper/blob/main/src/Screenshot%202025-08-26%20134101.png)
 
 </xaiArtifact>
