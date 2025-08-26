@@ -27,6 +27,8 @@ StudentWhisper is a lean, campus-centric platform:
 
 This is the campus’s pulse, amplifying voices and powering smarter choices.
 
+![StudentWhisper Screenshot](https://github.com/Elvis-NChalant/student-whisper/blob/main/src/Screenshot%202025-08-26%20134031.png)
+
 ## Why We Win (AUXIA Criteria)
 - **Creativity:** First-of-its-kind blend of anonymous networking and AI-driven career insights, hyper-focused on campus needs.
 - **Execution:** Fully functional prototype, live at [Insert Demo Link], with a crisp video walkthrough [Insert Video Link]. Shipped in 48 hours.
@@ -106,8 +108,6 @@ flowchart TD
 - **Elvis Vincent**:Full-Stack & AI
 
 StudentWhisper is the campus’s heartbeat—smart, connected, and built to empower. Let’s redefine college life.
-
-![StudentWhisper Screenshot](https://github.com/Elvis-NChalant/student-whisper/blob/main/src/Screenshot%202025-08-26%20134031.png)
 
 ![StudentWhisper Screenshot](https://github.com/Elvis-NChalant/student-whisper/blob/main/src/Screenshot%202025-08-26%20134101.png)
 
